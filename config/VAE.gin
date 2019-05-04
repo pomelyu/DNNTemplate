@@ -1,0 +1,41 @@
+LATENT_SIZE = 128
+IMAGE_SIZE = 64
+IMAGE_DEPTH = 3
+
+# Training
+train.checkpoints_dir       = "checkpoints/VAE"
+train.exp_name              = "demo"
+train.model                 = @VAE
+train.train_dataset         = @train/ImageDataset
+train.valid_dataset         = @valid/ImageDataset
+train.use_gpu               = False
+train.epoch_total           = 10
+train.epoch_start           = 1
+train.load_epoch            = None
+train.print_steps           = 10
+train.display_steps         = 10
+train.save_model_epoch      = 1
+train.save_latest_steps     = 50
+
+create_optimizer.optimizer  = @optim.Adam
+create_optimizer.lr         = 0.0001
+create_optimizer.betas      = (0.9, 0.999)
+
+# Model
+VAE.lambda_kl               = 10
+VAEEncoder.latent_size      = %LATENT_SIZE
+VAEEncoder.ngf              = 32
+VAEDecoder.latent_size      = %LATENT_SIZE
+VAEDecoder.ngf              = 32
+
+# Dataset
+create_dataloader.batch_size    = 8
+create_dataloader.num_workers   = 2
+
+train/ImageDataset.dataroot     = "data/demo"
+train/ImageDataset.image_size   = %IMAGE_SIZE
+train/ImageDataset.image_depth  = %IMAGE_DEPTH
+
+valid/ImageDataset.dataroot     = "data/demo"
+valid/ImageDataset.image_size   = %IMAGE_SIZE
+valid/ImageDataset.image_depth  = %IMAGE_DEPTH
