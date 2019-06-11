@@ -68,7 +68,7 @@ def train(
                     logger.add_images("/".join(tag_arr), image, steps)
 
             if steps % save_latest_steps == 0:
-                model.save_networks(experiment_dir, "latest")
+                model.save_networks(experiment_dir, "latest", with_optimizer=True)
 
         model.update_epoch(epoch)
         if epoch % save_model_epoch == 0:

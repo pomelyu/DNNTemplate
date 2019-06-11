@@ -1,6 +1,5 @@
 from pathlib import Path
 import time
-import torch
 from tensorboardX import SummaryWriter
 
 class Logger():
