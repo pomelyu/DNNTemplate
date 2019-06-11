@@ -95,8 +95,9 @@ class BaseModel(metaclass=ABCMeta):
 
         for optimizer_name in self.optimizers:
             load_name = Path(path) / "{}_{}.pth".format(epoch, optimizer_name)
-            getattr(self, optimizer_name).load_state_dict(torch.load(load_name))
-            print("load {}_{}.pth".format(epoch, optimizer_name))
+            if Path(load_name).exists():
+                getattr(self, optimizer_name).load_state_dict(torch.load(load_name))
+                print("load {}_{}.pth".format(epoch, optimizer_name))
 
     def set_requires_grad(self, nets, requires_grad=False):
         if not isinstance(nets, list):
