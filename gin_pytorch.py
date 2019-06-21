@@ -2,6 +2,7 @@ from torch import optim
 from torch.optim import lr_scheduler
 from torch import nn
 from gin import config
+import gin
 
 # Optimizer
 config.external_configurable(optim.Adam, "optim.Adam")
