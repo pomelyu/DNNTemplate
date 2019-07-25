@@ -22,7 +22,8 @@ class DeConvBlock(nn.Sequential):
         else:
             raise NameError("Unknown method: " + method)
 
-        self.add_module("norm", norm_layer(output_nc))
+        if norm_layer:
+            self.add_module("norm", norm_layer(output_nc))
         if actv_layer:
             self.add_module("actv", actv_layer)
 
@@ -35,7 +36,8 @@ class ConvBlock(nn.Sequential):
         actv_layer = get_activation(activation)
         self.add_module("conv", nn.Conv2d(input_nc, output_nc, kernel_size, stride, \
                             padding=padding, bias=use_bias))
-        self.add_module("norm", norm_layer(output_nc))
+        if norm_layer:
+            self.add_module("norm", norm_layer(output_nc))
         if actv_layer:
             self.add_module("actv", actv_layer)
 
@@ -48,7 +50,7 @@ def get_norm_layer(norm_type='instance'):
     elif norm_type == 'instance':
         norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
     elif norm_type == 'none':
-        norm_layer = SkipLayer
+        norm_layer = None
     else:
         raise NotImplementedError('normalization layer [%s] is not found' % norm_type)
     return norm_layer
@@ -82,13 +84,6 @@ def get_activation(activation="relu"):
     else:
         raise NotImplementedError('Unsupported activation: {}'.format(activation))
     return activation_layer
-
-class SkipLayer(nn.Module):
-    def __init__(self, *args): # pylint: disable=unused-argument
-        super(SkipLayer, self).__init__()
-
-    def forward(self, x):
-        return x
 
 
 class InterpolateLayer(nn.Module):
