@@ -63,6 +63,8 @@ def train(
 
     steps = (epoch_start - 1) * len(train_dataloader)
     for epoch in range(epoch_start, epoch_total+1):
+        model.update_epoch(epoch)
+
         # Training
         train_losses = {k: [] for k in model.losses}
         for data in tqdm(train_dataloader, total=len(train_dataloader), ascii=True):
@@ -90,7 +92,6 @@ def train(
             if steps % save_latest_steps == 0:
                 model.save_networks(experiment_dir, "latest", with_optimizer=True)
 
-        model.update_epoch(epoch)
         if epoch % save_model_epoch == 0:
             model.save_networks(experiment_dir, epoch)
         model.save_networks(experiment_dir, "latest", with_optimizer=True)

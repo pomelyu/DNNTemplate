@@ -76,7 +76,7 @@ class BaseModel(metaclass=ABCMeta):
 
     def update_epoch(self, epoch):
         for scheduler in self.lr_schedulers:
-            scheduler.step()
+            scheduler.step(epoch)
         lr = getattr(self, self.optimizers[0]).param_groups[0]['lr']
         print('learning rate = {:.7f}'.format(lr))
 
