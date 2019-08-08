@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from torch import nn
 import torch.nn.functional as F
 
@@ -43,6 +44,44 @@ class DeConvBlock(nn.Sequential):
         if actv_layer is not None:
             self.add_module("actv", actv_layer)
 
+class MobileNetV2Block(nn.Module):
+    def __init__(self, inp, oup=None, expand_ratio=6, norm="batch", bias=False):
+        super(MobileNetV2Block, self).__init__()
+        # if oup is not set or oup == inp, it works likes Residual Block
+        # otherwise, it works likes DownSampleBlock
+
+        if oup is None or oup == inp:
+            self.has_shortcut = True
+            oup = inp
+            stride = 1
+        else:
+            self.has_shortcut = False
+            stride = 2
+
+        hidden_dim = int(inp * expand_ratio)
+        norm_layer = get_norm_layer2d(hidden_dim, norm)
+
+        self.conv1 = ConvBlock(inp, hidden_dim, 1, 1, 0, bias=bias, norm=norm, actv="relu6")
+        if norm_layer is not None:
+            self.dwise = nn.Sequential(OrderedDict([
+                ("conv", nn.Conv2d(hidden_dim, hidden_dim, 3, stride, 1, groups=hidden_dim, bias=bias)),
+                ("norm", norm_layer),
+                ("actv", nn.ReLU6()),
+            ]))
+        else:
+            self.dwise = nn.Sequential(OrderedDict([
+                ("conv", nn.Conv2d(hidden_dim, hidden_dim, 3, stride, 1, groups=hidden_dim, bias=bias)),
+                ("actv", nn.ReLU6()),
+            ]))
+        self.conv2 = ConvBlock(hidden_dim, oup, 1, 1, 0, bias=bias, norm=norm, actv="none")
+
+    def forward(self, x):
+        if not self.has_shortcut:
+            return self.conv2(self.dwise(self.conv1(x)))
+
+        shortcut = x
+        x = self.conv2(self.dwise(self.conv1(x)))
+        return x + shortcut
 
 
 ### Layers ###
