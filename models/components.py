@@ -1,103 +1,55 @@
-import functools
 from torch import nn
 import torch.nn.functional as F
 
 # pylint: disable=arguments-differ
 
 ### Blocks ###
-class DeConvBlock(nn.Sequential):
-    def __init__(self, input_nc, output_nc, method="convTrans", \
-        kernel_size=4, stride=2, padding=1, norm="batch", activation="lrelu", use_bias=False):
-        super(DeConvBlock, self).__init__()
+class ConvBlock(nn.Sequential):
+    def __init__(self, input_nc, output_nc, kernel_size=3, stride=2, padding=1, bias=False, norm="batch", actv="relu"):
+        super(ConvBlock, self).__init__()
+        # Convolution
+        self.add_module("conv", nn.Conv2d(input_nc, output_nc, kernel_size, stride, padding=padding, bias=bias))
 
-        norm_layer = get_norm_layer(norm)
-        actv_layer = get_activation(activation)
+        # Normalization
+        norm_layer = get_norm_layer2d(output_nc, norm=norm)
+        if norm_layer is not None:
+            self.add_module("norm", norm_layer)
+
+        # Activation
+        actv_layer = get_activation_layer(actv)
+        if actv_layer is not None:
+            self.add_module("actv", actv_layer)
+
+class DeConvBlock(nn.Sequential):
+    def __init__(self, input_nc, output_nc, kernel_size=3, stride=2, padding=1, bias=False, norm="batch", actv="lrelu", method="deConv"):
+        super(DeConvBlock, self).__init__()
+        # Convolution
         if method == "convTrans":
-            self.add_module("deconv", nn.ConvTranspose2d(input_nc, output_nc, kernel_size, \
-                                stride, padding=padding, bias=use_bias))
+            self.add_module("deconv", nn.ConvTranspose2d(input_nc, output_nc, kernel_size, stride, padding=padding, bias=bias))
         elif method == "deConv":
             self.add_module("deconv", DeConvLayer(input_nc, output_nc))
         elif method == "pixlSuffle":
-            raise NotImplementedError("PixelSuffle not implemente")
+            raise NotImplementedError("PixelSuffle is not implemented")
         else:
             raise NameError("Unknown method: " + method)
 
-        if norm_layer:
-            self.add_module("norm", norm_layer(output_nc))
-        if actv_layer:
-            self.add_module("actv", actv_layer)
+        # Normalization
+        norm_layer = get_norm_layer2d(output_nc, norm=norm)
+        if norm_layer is not None:
+            self.add_module("norm", norm_layer)
 
-class ConvBlock(nn.Sequential):
-    def __init__(self, input_nc, output_nc, kernel_size=4, stride=2, padding=1, \
-        norm="batch", activation="lrelu", use_bias=False):
-        super(ConvBlock, self).__init__()
-
-        norm_layer = get_norm_layer(norm)
-        actv_layer = get_activation(activation)
-        self.add_module("conv", nn.Conv2d(input_nc, output_nc, kernel_size, stride, \
-                            padding=padding, bias=use_bias))
-        if norm_layer:
-            self.add_module("norm", norm_layer(output_nc))
-        if actv_layer:
+        # Activation
+        actv_layer = get_activation_layer(actv)
+        if actv_layer is not None:
             self.add_module("actv", actv_layer)
 
 
 
 ### Layers ###
-def get_norm_layer(norm_type='instance'):
-    if norm_type == 'batch':
-        norm_layer = functools.partial(nn.BatchNorm2d, affine=True)
-    elif norm_type == 'instance':
-        norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
-    elif norm_type == 'none':
-        norm_layer = None
-    else:
-        raise NotImplementedError('normalization layer [%s] is not found' % norm_type)
-    return norm_layer
-
-def get_pad_layer(pad_type="zero"):
-    if pad_type == "zero":
-        pad_layer = functools.partial(nn.ZeroPad2d)
-    elif pad_type == "reflect":
-        pad_layer = functools.partial(nn.ReflectionPad2d)
-    elif pad_type == "replicate":
-        pad_layer = functools.partial(nn.ReplicationPad2d)
-    else:
-        raise NotImplementedError('padding layer [%s] is not found' % pad_type)
-    return pad_layer
-
-def get_activation(activation="relu"):
-    if activation == 'relu':
-        activation_layer = nn.ReLU(inplace=True)
-    elif activation == 'lrelu':
-        activation_layer = nn.LeakyReLU(0.2, inplace=True)
-    elif activation == 'prelu':
-        activation_layer = nn.PReLU()
-    elif activation == 'selu':
-        activation_layer = nn.SELU(inplace=True)
-    elif activation == 'tanh':
-        activation_layer = nn.Tanh()
-    elif activation == 'hardtanh':
-        activation_layer = nn.Hardtanh(inplace=True)
-    elif activation == 'none':
-        activation_layer = None
-    else:
-        raise NotImplementedError('Unsupported activation: {}'.format(activation))
-    return activation_layer
-
-
-class InterpolateLayer(nn.Module):
-    def __init__(self, scale_factor):
-        super(InterpolateLayer, self).__init__()
-        self.scale_factor = scale_factor
-
-    def forward(self, x):
-        return F.interpolate(x, scale_factor=self.scale_factor)
-
 class DeConvLayer(nn.Module):
-    def __init__(self, input_nc, output_nc, use_bias=False):
+    def __init__(self, input_nc, output_nc, bias=False):
         super(DeConvLayer, self).__init__()
-        self.model = nn.Conv2d(input_nc, output_nc, kernel_size=3, padding=1, bias=use_bias)
+        self.model = nn.Conv2d(input_nc, output_nc, kernel_size=3, padding=1, bias=bias)
 
     def forward(self, x):
         x = nn.functional.interpolate(x, scale_factor=2)
@@ -108,6 +60,11 @@ class FlattenLayer(nn.Module):
         num_batch = x.shape[0]
         return x.view(num_batch, -1)
 
+class L2NormalizeLayer(nn.Module):
+    def forward(self, x):
+        assert len(x.shape) == 2
+        return nn.functional.normalize(x, p=2, dim=1)
+
 class ReshapeLayer(nn.Module):
     def __init__(self, shape):
         super(ReshapeLayer, self).__init__()
@@ -117,10 +74,13 @@ class ReshapeLayer(nn.Module):
         num_batch = x.shape[0]
         return x.view(num_batch, *self.shape)
 
-class L2NormalizeLayer(nn.Module):
+class InterpolateLayer(nn.Module):
+    def __init__(self, scale_factor):
+        super(InterpolateLayer, self).__init__()
+        self.scale_factor = scale_factor
+
     def forward(self, x):
-        assert len(x.shape) == 2
-        return nn.functional.normalize(x, p=2, dim=1)
+        return F.interpolate(x, scale_factor=self.scale_factor)
 
 class GradientReverseLayer(nn.Module):
     def __init__(self, scale):
@@ -132,3 +92,48 @@ class GradientReverseLayer(nn.Module):
 
     def backward(self, grad_out):
         return -self.scale * grad_out.clone()
+
+
+# pylint: disable=abstract-method
+### Loss ###
+class KLLoss(nn.Module):
+    def __call__(self, mu, logvar):
+        # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+        klds = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
+        return klds.sum(1).mean(0)
+
+
+
+
+
+def get_activation_layer(actv="relu"):
+    layer = None
+    if actv == "none":
+        pass
+    elif actv == "relu":
+        layer = nn.ReLU()
+    elif actv == "relu6":
+        layer = nn.ReLU6()
+    elif actv == "lrelu":
+        layer = nn.LeakyReLU(0.2)
+    elif actv == "tanh":
+        layer = nn.Tanh()
+    elif actv == "sigmoid":
+        layer = nn.Sigmoid()
+    else:
+        raise NameError("Unknown activation: {}".format(actv))
+
+    return layer
+
+def get_norm_layer2d(nch, norm="batch"):
+    layer = None
+    if norm == "none":
+        pass
+    elif norm == "batch":
+        layer = nn.BatchNorm2d(nch)
+    elif norm == "instance":
+        layer = nn.InstanceNorm2d(nch)
+    else:
+        raise NameError("Unknown normalization: {}".format(norm))
+
+    return layer

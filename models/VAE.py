@@ -2,11 +2,11 @@ import itertools
 import torch
 from torch import nn
 import gin
-from models.BaseModel import BaseModel
-from models.components import ConvBlock, DeConvBlock, FlattenLayer, ReshapeLayer, DeConvLayer
-from models.helper import create_network, create_optimizer
+from .BaseModel import BaseModel
+from .components import ConvBlock, DeConvBlock, FlattenLayer, ReshapeLayer, DeConvLayer, KLLoss
+from .helper import create_network, create_optimizer
 
-# pylint: disable=attribute-defined-outside-init
+# pylint: disable=arguments-differ
 
 @gin.configurable(blacklist=["isTrain", "device"])
 class VAE(BaseModel):
@@ -75,19 +75,19 @@ class VAE(BaseModel):
 
 @gin.configurable()
 class VAEEncoder(nn.Module):
-    def __init__(self, latent_size, ngf=128, norm="batch", use_bias=False):
+    def __init__(self, latent_size, ngf=128, norm="batch", bias=False):
         super(VAEEncoder, self).__init__()
         self.model = nn.Sequential(
             # 3, 64, 64 -> 32, 32, 32
-            ConvBlock(3, ngf*1, norm=norm, use_bias=use_bias),
+            ConvBlock(3, ngf*1, norm=norm, bias=bias),
             # 32, 32, 32 -> 64, 16, 16
-            ConvBlock(ngf*1, ngf*2, norm=norm, use_bias=use_bias),
+            ConvBlock(ngf*1, ngf*2, norm=norm, bias=bias),
             # 64, 16, 16 -> 128, 8, 8
-            ConvBlock(ngf*2, ngf*4, norm=norm, use_bias=use_bias),
+            ConvBlock(ngf*2, ngf*4, norm=norm, bias=bias),
             # 128, 8, 8 -> 256, 4, 4
-            ConvBlock(ngf*4, ngf*8, norm=norm, use_bias=use_bias),
+            ConvBlock(ngf*4, ngf*8, norm=norm, bias=bias),
             # 256, 4, 4 -> 256, 2, 2
-            ConvBlock(ngf*8, ngf*8, norm=norm, use_bias=use_bias),
+            ConvBlock(ngf*8, ngf*8, norm=norm, bias=bias),
             # 256, 2, 2 -> 1024
             FlattenLayer(),
         )
@@ -101,7 +101,7 @@ class VAEEncoder(nn.Module):
 
 @gin.configurable()
 class VAEDecoder(nn.Module):
-    def __init__(self, latent_size, ngf=128, norm="batch", use_bias=False):
+    def __init__(self, latent_size, ngf=128, norm="batch", bias=False):
         super(VAEDecoder, self).__init__()
         self.model = nn.Sequential(
             # latent -> 1024
@@ -111,13 +111,13 @@ class VAEDecoder(nn.Module):
             # 1024 -> 256, 2, 2
             ReshapeLayer((256, 2, 2)),
             # 256, 2, 2 -> 256, 4, 4
-            DeConvBlock(ngf*8, ngf*8, method="deConv", norm=norm, use_bias=use_bias),
+            DeConvBlock(ngf*8, ngf*8, method="deConv", norm=norm, bias=bias),
             # 256, 4, 4 -> 128, 8, 8
-            DeConvBlock(ngf*8, ngf*4, method="deConv", norm=norm, use_bias=use_bias),
+            DeConvBlock(ngf*8, ngf*4, method="deConv", norm=norm, bias=bias),
             # 128, 8, 8 -> 64, 16, 16
-            DeConvBlock(ngf*4, ngf*2, method="deConv", norm=norm, use_bias=use_bias),
+            DeConvBlock(ngf*4, ngf*2, method="deConv", norm=norm, bias=bias),
             # 64, 16, 16 -> 32, 32, 32
-            DeConvBlock(ngf*2, ngf*1, method="deConv", norm=norm, use_bias=use_bias),
+            DeConvBlock(ngf*2, ngf*1, method="deConv", norm=norm, bias=bias),
             # 32, 32, 32 -> 3, 64, 64
             DeConvLayer(ngf*1, 3),
             nn.Tanh(),
@@ -125,10 +125,3 @@ class VAEDecoder(nn.Module):
 
     def forward(self, x):
         return self.model(x)
-
-
-class KLLoss(nn.Module):
-    def __call__(self, mu, logvar):
-        # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-        klds = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
-        return klds.sum(1).mean(0)
