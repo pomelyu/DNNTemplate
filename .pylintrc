@@ -1,6 +1,7 @@
 [MASTER]
 # remove warning about relative import
 init-hook='import sys; sys.path.append(".")'
+ignore-patterns=*.gin
 
 [TYPECHECK]
  
